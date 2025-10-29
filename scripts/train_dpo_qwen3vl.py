@@ -74,7 +74,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--image-root",
         type=Path,
-        default=Path("images"),
+        default=Path("images/OG_image"),
         help="Directory that stores the image files referenced in the CSV.",
     )
     parser.add_argument(
@@ -163,16 +163,23 @@ def collect_preference_examples(csv_path: Path) -> list[PreferenceExample]:
         if positives.empty or negatives.empty:
             continue
 
-        prompts = group["prompt"].dropna().unique()
-        if len(prompts) == 0:
-            LOGGER.warning("Skipping ID %s because prompt is missing.", id_value)
-            continue
-        if len(prompts) > 1:
-            LOGGER.warning("Multiple prompts detected for ID %s, using the first one.", id_value)
-        prompt_text = str(prompts[0])
-
         prompt_types = group["prompt_type"].dropna().unique()
         prompt_type = prompt_types[0] if len(prompt_types) > 0 else "text"
+
+        prompt_candidates = [
+            value.strip()
+            for value in group["prompt"].dropna().astype(str)
+            if isinstance(value, str) and value.strip() and value.strip().lower() != "nan"
+        ]
+        if len(set(prompt_candidates)) > 1:
+            LOGGER.warning("Multiple prompts detected for ID %s, using the first one.", id_value)
+
+        prompt_text = prompt_candidates[0] if prompt_candidates else None
+        if prompt_type == "image" and not prompt_text:
+            prompt_text = "画像で一言"
+        if prompt_type != "image" and not prompt_text:
+            LOGGER.warning("Skipping ID %s because text prompt is missing.", id_value)
+            continue
 
         image_value = None
         if prompt_type == "image":
