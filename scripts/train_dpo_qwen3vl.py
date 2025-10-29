@@ -19,7 +19,7 @@ import math
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
 import pandas as pd
 from datasets import Dataset
@@ -29,6 +29,7 @@ from transformers import (
     AutoModelForVision2Seq,
     AutoProcessor,
     BitsAndBytesConfig,
+    PreTrainedTokenizerBase,
 )
 from trl import DPOConfig, DPOTrainer
 
@@ -63,6 +64,59 @@ class PreferenceExample:
         }
 
 
+class OptionalVisionDPOTrainer(DPOTrainer):
+    """DPO trainer that tolerates entries without images when using a VLM processor."""
+
+    @staticmethod
+    def process_row(
+        features: dict[str, Any],
+        processing_class: PreTrainedTokenizerBase,
+        max_prompt_length: Optional[int] = None,
+        max_completion_length: Optional[int] = None,
+        add_special_tokens: bool = True,
+    ) -> dict[str, list[int]]:
+        processor = processing_class
+        tokenizer = processor.tokenizer
+
+        processed_features = processor(images=features.get("images"), text=features["prompt"], add_special_tokens=False)
+
+        prompt_input_ids = processed_features["input_ids"][0]
+        pixel_values = processed_features.get("pixel_values")
+        if pixel_values is not None:
+            pixel_values = pixel_values[0]
+
+        chosen_input_ids = tokenizer(features["chosen"], add_special_tokens=False)["input_ids"]
+        rejected_input_ids = tokenizer(features["rejected"], add_special_tokens=False)["input_ids"]
+
+        if add_special_tokens:
+            if tokenizer.bos_token_id is not None:
+                prompt_input_ids = [tokenizer.bos_token_id] + prompt_input_ids
+            if tokenizer.eos_token_id is not None:
+                prompt_input_ids = prompt_input_ids + [tokenizer.eos_token_id]
+        chosen_input_ids = chosen_input_ids + [tokenizer.eos_token_id]
+        rejected_input_ids = rejected_input_ids + [tokenizer.eos_token_id]
+
+        if max_prompt_length is not None:
+            prompt_input_ids = prompt_input_ids[-max_prompt_length:]
+        if max_completion_length is not None:
+            chosen_input_ids = chosen_input_ids[:max_completion_length]
+            rejected_input_ids = rejected_input_ids[:max_completion_length]
+
+        output: dict[str, Any] = {
+            "prompt_input_ids": prompt_input_ids,
+            "chosen_input_ids": chosen_input_ids,
+            "rejected_input_ids": rejected_input_ids,
+        }
+        if pixel_values is not None:
+            output["pixel_values"] = pixel_values
+
+        for key in ("pixel_attention_mask", "image_sizes", "token_type_ids"):
+            if key in processed_features:
+                output[key] = processed_features[key][0]
+
+        return output
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a DPO model on the reordered Oogiri dataset with Qwen3-VL.")
     parser.add_argument(
@@ -80,8 +134,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model-name",
         type=str,
-        default="Qwen/Qwen3-VL-8B-Instruct",
-        help="Hugging Face model identifier to finetune.",
+        default="./models/Qwen3-VL-8B-Instruct",
+        help="Model id (e.g. 'Qwen/Qwen3-VL-8B-Instruct') or a local directory path downloaded beforehand.",
+    )
+    parser.add_argument(
+        "--local-files-only",
+        action="store_true",
+        help="Force offline mode: only load from local files and never access the network.",
     )
     parser.add_argument(
         "--output-dir",
@@ -253,7 +312,7 @@ def build_dataset(
     def _attach_images(batch: dict) -> dict:
         prompt_types = batch["prompt_type"]
         image_ids = batch["image_id"]
-        images: list[list[Image.Image]] = []
+        images: list[Optional[list[Image.Image]]] = []
         for prompt_type, image_id in zip(prompt_types, image_ids):
             if prompt_type == "image" and image_id:
                 image_path = resolve_image_path(image_root, image_id)
@@ -264,7 +323,7 @@ def build_dataset(
                 image = Image.open(image_path).convert("RGB")
                 images.append([image])
             else:
-                images.append([])
+                images.append(None)
         batch["images"] = images
         return batch
 
@@ -293,7 +352,18 @@ def main() -> None:
     train_dataset = build_dataset(train_examples, args.image_root)
     eval_dataset = build_dataset(val_examples, args.image_root) if val_examples else None
 
-    processor = AutoProcessor.from_pretrained(args.model_name, trust_remote_code=True)
+    # Detect local/offline mode automatically if --local-files-only is given or the path exists
+    model_path = Path(args.model_name)
+    use_local = args.local_files_only or model_path.exists()
+    if args.local_files_only and not model_path.exists():
+        raise FileNotFoundError(f"--local-files-only was set but the path does not exist: {model_path}")
+
+    LOGGER.info("Loading processor from %s (local_files_only=%s)", args.model_name, use_local)
+    processor = AutoProcessor.from_pretrained(
+        args.model_name,
+        trust_remote_code=True,
+        local_files_only=use_local,
+    )
 
     model_kwargs = {}
     if args.use_4bit:
@@ -305,10 +375,11 @@ def main() -> None:
     else:
         model_kwargs["torch_dtype"] = torch.bfloat16 if args.bf16 else torch.float16
 
-    LOGGER.info("Loading policy model %s", args.model_name)
+    LOGGER.info("Loading policy model from %s (local_files_only=%s)", args.model_name, use_local)
     model = AutoModelForVision2Seq.from_pretrained(
         args.model_name,
         trust_remote_code=True,
+        local_files_only=use_local,
         device_map="auto",
         **model_kwargs,
     )
@@ -326,7 +397,7 @@ def main() -> None:
         logging_steps=args.logging_steps,
         save_strategy="steps",
         save_steps=args.save_steps,
-        evaluation_strategy="steps" if eval_dataset is not None else "no",
+        eval_strategy="steps" if eval_dataset is not None else "no",
         eval_steps=args.eval_steps,
         report_to=["tensorboard"],
         remove_unused_columns=False,
@@ -337,7 +408,7 @@ def main() -> None:
         seed=args.seed,
     )
 
-    trainer = DPOTrainer(
+    trainer = OptionalVisionDPOTrainer(
         model=model,
         ref_model=None,
         args=training_args,

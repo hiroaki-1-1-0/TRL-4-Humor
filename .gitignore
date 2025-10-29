@@ -1,0 +1,4 @@
+models/
+outputs/
+.cache
+./__pycache__
