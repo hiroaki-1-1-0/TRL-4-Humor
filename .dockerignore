@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.swp
+.mypy_cache
+.pytest_cache
+.DS_Store
+outputs
+wandb
+images
+*.csv
