@@ -8,7 +8,7 @@ The script builds preference pairs by grouping rows that share the same `ID` and
 `dataset` column is `"OG"` participate in training.
 
 When `prompt_type == "image"`, the script expects the corresponding image file to live in
-`<image_root>/{image}.jpg` and injects it into the chat template using the Qwen processor.
+`<image_root>/{ID}.jpg` and injects it into the chat template using the Qwen processor.
 """
 
 from __future__ import annotations
@@ -106,16 +106,16 @@ class OptionalVisionDPOTrainer(DPOTrainer):
             "prompt_input_ids": prompt_input_ids,
             "chosen_input_ids": chosen_input_ids,
             "rejected_input_ids": rejected_input_ids,
+            "pixel_values": None,
         }
+
         if pixel_values is not None:
             output["pixel_values"] = pixel_values
 
         for key in ("pixel_attention_mask", "image_sizes", "token_type_ids"):
-            if key in processed_features:
-                output[key] = processed_features[key][0]
+            output[key] = processed_features[key][0] if key in processed_features else None
 
         return output
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a DPO model on the reordered Oogiri dataset with Qwen3-VL.")
@@ -201,7 +201,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bf16",
         action="store_true",
-        help="Run training in bfloat16. Enable when hardware supports bf16 for best stability with Qwen3-VL.",
+        default=True,
+        help="Run training in bfloat16 (default). Enable when hardware supports bf16 for best stability with Qwen3-VL.",
     )
     return parser.parse_args()
 
@@ -242,11 +243,10 @@ def collect_preference_examples(csv_path: Path) -> list[PreferenceExample]:
 
         image_value = None
         if prompt_type == "image":
-            image_candidates = group["image"].dropna().unique()
-            if len(image_candidates) == 0:
-                LOGGER.warning("ID %s has image prompt type but no image value.", id_value)
-            else:
-                image_value = str(image_candidates[0])
+            image_value = str(id_value).strip()
+            if not image_value:
+                LOGGER.warning("ID %s has image prompt type but a blank ID value.", id_value)
+                continue
 
         prompt_messages = [{"role": "user", "content": prompt_text}]
 
