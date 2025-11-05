@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-texts/go_t2t_en.jsonl を読み込み、各「お題（question）」ごとに
+texts/go/t2t_en.jsonl を読み込み、各「お題（question）」ごとに
 回答の star の最大値（max_star）を求めてヒストグラムを描画・保存するスクリプト。
 付属の chaya_make_hist_from_first_vote.py と同様に、しきい値 a を対話入力して
 「a 以上を満たすお題のカバー率」を繰り返し表示するモードも備えています。
 
 使い方例:
     python go_make_hist_from_first_vote.py \
-        --input texts/go_t2t_en.jsonl \
+        --input texts/go/t2t_en.jsonl \
         --out-csv test/go_max_star_per_question.csv \
         --out-png test/go_max_star_histogram.png
 
@@ -163,7 +163,7 @@ def run_interactive_loop(df: pd.DataFrame) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", default="texts/go_t2t_en.jsonl",
+    ap.add_argument("--input", default="texts/go/t2t_en.jsonl",
                     help="入力 JSONL（.jsonl または .jsonl.gz）")
     ap.add_argument("--out-csv", default="test/fig/go_max_star_per_question.csv",
                     help="集計結果 CSV の出力先")

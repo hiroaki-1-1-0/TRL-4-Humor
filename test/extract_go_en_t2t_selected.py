@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-texts/go_t2t_en.jsonl を基に、
+texts/go/t2t_en.jsonl を基に、
 「お題（question）ごとの star の最大値 >= 10」のお題のみを選定し、
 該当するお題に属するレコードだけを JSONL として出力します。
 （＝お題単位でフィルタリングし、元レコードの内容はそのまま保ちます。）
 
 使い方:
   python go_make_selected_from_first_vote.py \
-    --input texts/go_t2t_en.jsonl \
-    --output texts/go_t2t_en_selected.jsonl \
+    --input texts/go/t2t_en.jsonl \
+    --output texts/go/t2t_en_selected.jsonl \
     --threshold 10
 
 備考:
@@ -116,9 +116,9 @@ def filter_by_questions(input_path: str, output_path: str, keep_questions: Set[s
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", "-i", default="texts/go_t2t_en.jsonl",
+    ap.add_argument("--input", "-i", default="texts/go/t2t_en.jsonl",
                     help="入力ファイル（.jsonl / .jsonl.gz）")
-    ap.add_argument("--output", "-o", default="texts/go_t2t_en_selected.jsonl",
+    ap.add_argument("--output", "-o", default="texts/go/t2t_en_selected.jsonl",
                     help="出力ファイル（.jsonl / .jsonl.gz）")
     ap.add_argument("--threshold", "-t", type=float, default=10.0,
                     help="お題の max(star) の下限 (既定: 10)")

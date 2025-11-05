@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-en.jsonl を2パスで走査して、以下を満たすレコードのみ go_t2t_en.jsonl に抽出します。
+en.jsonl を2パスで走査して、以下を満たすレコードのみ go/t2t_en.jsonl に抽出します。
   - type が "T2T"
   - 同一 question を持つレコードが複数存在（>= 2）
   - question も text も null ではない（空文字は許容。要件が null のみだったため）
 
 使い方:
-  python make_go_t2t_en.py --input en.jsonl --output go_t2t_en.jsonl
+  python make_go/t2t_en.py --input en.jsonl --output go/t2t_en.jsonl
 
 gz圧縮(.jsonl.gz)にも自動対応します。
 """
@@ -58,8 +58,8 @@ def iter_jsonl(path: str) -> Iterator[Dict[str, Any]]:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", "-i", default="texts/en.jsonl", help="入力 en.jsonl（または .jsonl.gz）")
-    parser.add_argument("--output", "-o", default="test/go_t2t_en.jsonl",
-                        help="出力ファイル名（既定: test/go_t2t_en.jsonl。拡張子 .gz なら gzip 出力）")
+    parser.add_argument("--output", "-o", default="test/go/t2t_en.jsonl",
+                        help="出力ファイル名（既定: test/go/t2t_en.jsonl。拡張子 .gz なら gzip 出力）")
     args = parser.parse_args()
 
     in_path = args.input

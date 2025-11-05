@@ -64,7 +64,7 @@ def download(url, out_path: Path, token: str|None, force: bool):
 
 def main():
     p = argparse.ArgumentParser(description="Download en.jsonl from Hugging Face without extra deps")
-    p.add_argument("--out", default=str(Path("texts") / "go_en.jsonl"), help="保存先（既定: ./data/en.jsonl）")
+    p.add_argument("--out", default=str(Path("texts") / "go/en.jsonl"), help="保存先（既定: ./data/en.jsonl）")
     p.add_argument("--force", action="store_true", help="既存ファイルを上書き保存")
     p.add_argument("--token", default=os.environ.get("HUGGINGFACE_TOKEN"), help="必要ならHFトークンを指定（省略時は環境変数）")
     args = p.parse_args()
