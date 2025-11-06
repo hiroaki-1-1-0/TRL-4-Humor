@@ -9,4 +9,6 @@ __pycache__
 outputs
 wandb
 images
+texts
+models
 *.csv

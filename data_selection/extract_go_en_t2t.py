@@ -58,8 +58,8 @@ def iter_jsonl(path: str) -> Iterator[Dict[str, Any]]:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", "-i", default="texts/en.jsonl", help="入力 en.jsonl（または .jsonl.gz）")
-    parser.add_argument("--output", "-o", default="test/go/t2t_en.jsonl",
-                        help="出力ファイル名（既定: test/go/t2t_en.jsonl。拡張子 .gz なら gzip 出力）")
+    parser.add_argument("--output", "-o", default="data_selection/go/t2t_en.jsonl",
+                        help="出力ファイル名（既定: data_selection/go/t2t_en.jsonl。拡張子 .gz なら gzip 出力）")
     args = parser.parse_args()
 
     in_path = args.input

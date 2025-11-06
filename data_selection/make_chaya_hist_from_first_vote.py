@@ -105,8 +105,8 @@ def run_interactive_loop(df: pd.DataFrame):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", default="texts/Oogirichaya_raw_data", help="CSVディレクトリ or ZIPファイル（省略時はカレントディレクトリ）")
-    ap.add_argument("--out-csv", default="test/fig/first_record_votes_extracted.csv")
-    ap.add_argument("--out-png", default="test/fig/first_record_votes_histogram.png")
+    ap.add_argument("--out-csv", default="data_selection/fig/first_record_votes_extracted.csv")
+    ap.add_argument("--out-png", default="data_selection/fig/first_record_votes_histogram.png")
     ap.add_argument("--no-loop", action="store_true", help="インタラクティブな a 入力を行わない")
     args = ap.parse_args()
 
