@@ -1,0 +1,10 @@
+{
+  "model": "qwen3-4b-dpo",
+  "total": 55,
+  "valid": 55,
+  "correct": 23,
+  "accuracy": 0.41818181818181815,
+  "timestamp": "20251107_193646",
+  "save_dir": "eval/qwen3-4b-dpo",
+  "jsonl": "eval/qwen3-4b-dpo/eval_20251107_193646.jsonl"
+}

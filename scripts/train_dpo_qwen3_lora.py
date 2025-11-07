@@ -21,6 +21,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List
 
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 import torch
 from datasets import Dataset, DatasetDict
 from transformers import (
