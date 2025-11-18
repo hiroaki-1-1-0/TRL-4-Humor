@@ -8,9 +8,9 @@ texts/go/t2t_en.jsonl を読み込み、各「お題（question）」ごとに
 
 使い方例:
     python go_make_hist_from_first_vote.py \
-        --input texts/go/t2t_en.jsonl \
-        --out-csv data_selection/go_max_star_per_question.csv \
-        --out-png data_selection/go_max_star_histogram.png
+        --input data/texts/go/t2t_en.jsonl \
+        --out-csv scripts/data_selection/go_max_star_per_question.csv \
+        --out-png scripts/data_selection/go_max_star_histogram.png
 
 オプション:
     --no-loop : 実行後の対話モードを無効にします（既定では有効）。
@@ -163,11 +163,11 @@ def run_interactive_loop(df: pd.DataFrame) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", default="texts/go/t2t_en.jsonl",
+    ap.add_argument("--input", default="data/texts/go/t2t_en.jsonl",
                     help="入力 JSONL（.jsonl または .jsonl.gz）")
-    ap.add_argument("--out-csv", default="data_selection/fig/go_max_star_per_question.csv",
+    ap.add_argument("--out-csv", default="scripts/data_selection/fig/go_max_star_per_question.csv",
                     help="集計結果 CSV の出力先")
-    ap.add_argument("--out-png", default="data_selection/fig/go_max_star_histogram.png",
+    ap.add_argument("--out-png", default="scripts/data_selection/fig/go_max_star_histogram.png",
                     help="ヒストグラム PNG の出力先")
     ap.add_argument("--no-loop", action="store_true", help="インタラクティブな a 入力を行わない")
     args = ap.parse_args()

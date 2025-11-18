@@ -8,7 +8,10 @@ JSONL を question の値に基づく決定的なハッシュで 9:1 に分割�
 - 入力は JSONL（1行=1 JSONオブジェクト）を想定。出力は元行そのまま（余計な整形なし）。
 
 使い方:
-    python split_by_question.py --input INPUT.jsonl --out9 OUT_9.jsonl --out1 OUT_1.jsonl
+    python split_by_question.py \
+        --input data/texts/go/t2t_en.jsonl \
+        --out9 data/texts/go/t2t_en_selected_9.jsonl \
+        --out1 data/texts/go/t2t_en_selected_9.jsonl
 """
 
 import argparse

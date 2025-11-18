@@ -5,9 +5,10 @@
 「レコードのカバー率（残存件数 / 全体件数）」を逐次出力します。
 
 使い方:
-    python make_hist_from_first_vote.py --input <csv_dir_or_zip> (省略可) \
-        --out-csv first_record_votes_extracted.csv \
-        --out-png first_record_votes_histogram.png
+    python scripts/data_selection/make_chaya_hist_from_first_vote.py \
+        --input data/texts/Oogirichaya_raw_data \
+        --out-csv scripts/data_selection/fig/first_record_votes_extracted_new.csv \
+        --out-png scripts/data_selection/fig/first_record_votes_histogram_new.png
 
 オプション:
     --no-loop : 実行後のインタラクティブ入力を無効にします（既定では有効）。
@@ -16,6 +17,7 @@
     - 各CSVの1行目はヘッダとみなし、その直後(0番目のデータ行)の「得票数」列の値を抽出します。
     - 文字コードは UTF-8 / UTF-8-SIG / CP932 の順に試行します。
     - 列名は空白や全角スペースを除去して「得票数」と一致するものを優先します。
+    - 「お題画像」が NA ではない CSV は集計対象から除外します。
 """
 import argparse
 import sys
@@ -25,6 +27,16 @@ import glob
 
 import pandas as pd
 import matplotlib.pyplot as plt
+
+
+def is_na_like(value) -> bool:
+    """NA, NaN, 空文字を NA とみなすための補助関数。"""
+    if pd.isna(value):
+        return True
+    if isinstance(value, str):
+        normalized = value.replace("\u3000", " ").strip().lower()
+        return normalized in {"", "na", "nan", "none"}
+    return False
 
 def find_csvs(input_path: Path):
     if input_path.is_file() and input_path.suffix.lower() == ".zip":
@@ -46,6 +58,20 @@ def read_first_vote_count(path: Path):
         try:
             df = pd.read_csv(path, encoding=enc, nrows=1)
             df.columns = [str(c).replace("\u3000", " ").strip() for c in df.columns]
+            # 「お題画像」が NA でないファイルは対象外
+            odai_col = None
+            for c in df.columns:
+                c_norm = str(c).replace(" ", "")
+                if c == "お題画像" or c_norm == "お題画像":
+                    odai_col = c
+                    break
+            if odai_col is not None:
+                odai_val = df.iloc[0][odai_col]
+                if isinstance(odai_val, str):
+                    odai_val = odai_val.replace("\u3000", " ").strip()
+                if not is_na_like(odai_val):
+                    return None
+
             # 決め打ち列名・ゆるい一致
             candidates = ["得票数", "票数", "得 票 数", "得 票数", "得票 数"]
             col = None
@@ -74,7 +100,11 @@ def build_dataframe(csvs):
     records = []
     for p in csvs:
         v = read_first_vote_count(p)
+        if v is None:
+            continue
         records.append({"file": str(p), "first_record_得票数": v})
+    if not records:
+        return pd.DataFrame(columns=["file", "first_record_得票数"])
     df = pd.DataFrame(records).dropna(subset=["first_record_得票数"]).copy()
     df["first_record_得票数"] = df["first_record_得票数"].astype(float)
     return df
@@ -104,9 +134,9 @@ def run_interactive_loop(df: pd.DataFrame):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", default="texts/Oogirichaya_raw_data", help="CSVディレクトリ or ZIPファイル（省略時はカレントディレクトリ）")
-    ap.add_argument("--out-csv", default="data_selection/fig/first_record_votes_extracted.csv")
-    ap.add_argument("--out-png", default="data_selection/fig/first_record_votes_histogram.png")
+    ap.add_argument("--input", default="data/texts/Oogirichaya_raw_data", help="CSVディレクトリ or ZIPファイル（省略時はカレントディレクトリ）")
+    ap.add_argument("--out-csv", default="scripts/data_selection/fig/first_record_votes_extracted.csv")
+    ap.add_argument("--out-png", default="scripts/data_selection/fig/first_record_votes_histogram.png")
     ap.add_argument("--no-loop", action="store_true", help="インタラクティブな a 入力を行わない")
     args = ap.parse_args()
 

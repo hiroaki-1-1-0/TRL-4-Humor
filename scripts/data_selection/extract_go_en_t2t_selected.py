@@ -8,8 +8,8 @@ texts/go/t2t_en.jsonl を基に、
 
 使い方:
   python go_make_selected_from_first_vote.py \
-    --input texts/go/t2t_en.jsonl \
-    --output texts/go/t2t_en_selected.jsonl \
+    --input data/texts/go/t2t_en.jsonl \
+    --output data/texts/go/t2t_en_selected.jsonl \
     --threshold 10
 
 備考:
@@ -116,9 +116,9 @@ def filter_by_questions(input_path: str, output_path: str, keep_questions: Set[s
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", "-i", default="texts/go/t2t_en.jsonl",
+    ap.add_argument("--input", "-i", default="data/texts/go/t2t_en.jsonl",
                     help="入力ファイル（.jsonl / .jsonl.gz）")
-    ap.add_argument("--output", "-o", default="texts/go/t2t_en_selected.jsonl",
+    ap.add_argument("--output", "-o", default="data/texts/go/t2t_en_selected.jsonl",
                     help="出力ファイル（.jsonl / .jsonl.gz）")
     ap.add_argument("--threshold", "-t", type=float, default=10.0,
                     help="お題の max(star) の下限 (既定: 10)")
