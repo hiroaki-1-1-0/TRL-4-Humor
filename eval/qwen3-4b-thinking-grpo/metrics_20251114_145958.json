@@ -1,0 +1,10 @@
+{
+  "model": "qwen3-4b-thinking-grpo",
+  "total": 55,
+  "valid": 55,
+  "correct": 27,
+  "accuracy": 0.4909090909090909,
+  "timestamp": "20251114_145958",
+  "save_dir": "eval/qwen3-4b-thinking-grpo",
+  "jsonl": "eval/qwen3-4b-thinking-grpo/eval_20251114_145958.jsonl"
+}

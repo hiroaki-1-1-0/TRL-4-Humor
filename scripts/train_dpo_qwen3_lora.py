@@ -5,7 +5,7 @@ PYTHONPATH=/work/hiroaki/dev/TRL-4-Humor \
 torchrun --standalone --nproc_per_node=5 scripts/train_dpo_qwen3_lora.py \
   --model_path models/Qwen3-4B-Instruct-2507 \
   --data_path texts/go/t2t_en_selected_9.jsonl \
-  --output_dir outputs/qwen3-4b-dpo \
+  --output_dir outputs/qwen3-4b-instruct-dpo \
   --epochs 3 \
   --beta 0.1 \
   --lr 2e-5 \

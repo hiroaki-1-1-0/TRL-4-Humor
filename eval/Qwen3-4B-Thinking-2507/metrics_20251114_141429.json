@@ -1,0 +1,10 @@
+{
+  "model": "Qwen3-4B-Thinking-2507",
+  "total": 55,
+  "valid": 55,
+  "correct": 24,
+  "accuracy": 0.43636363636363634,
+  "timestamp": "20251114_141429",
+  "save_dir": "eval/Qwen3-4B-Thinking-2507",
+  "jsonl": "eval/Qwen3-4B-Thinking-2507/eval_20251114_141429.jsonl"
+}

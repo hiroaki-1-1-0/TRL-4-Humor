@@ -23,10 +23,11 @@ Evaluate base and fine-tuned Qwen-Instruct models on a pairwise preference task.
 
 Example:
   CUDA_VISIBLE_DEVICES=0 python scripts/eval_pairwise_qwen3.py \
-    --base_model_path models/Qwen3-4B-Instruct-2507 \
-    --ft_model_path outputs/qwen3-4b-dpo \
+    --base_model_path models/Qwen3-4B-Thinking-2507 \
+    --ft_model_path outputs/qwen3-4b-thinking-grpo \
     --seed 42 \
-    --use_flash_attn
+    --use_flash_attn \
+    --skip_base_eval
 
 Requirements:
   transformers >= 4.41, peft, torch, (optional) triton/flash-attn for --use_flash_attn.
@@ -46,6 +47,7 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from tqdm.auto import tqdm
 
 # Optional PEFT for LoRA adapters
 try:
@@ -322,6 +324,8 @@ def run_eval_one_model(
             top_k=50,
         )
 
+    progress = tqdm(total=len(eval_items), desc=f"[{model_name}] evaluating", unit="item")
+
     with open(out_jsonl, "w", encoding="utf-8") as f_out:
         for idx, item in enumerate(eval_items, start=1):
             q = item["question"]
@@ -367,8 +371,17 @@ def run_eval_one_model(
             }
             f_out.write(json.dumps(record, ensure_ascii=False) + "\n")
 
+            progress.update(1)
+            progress.set_postfix({
+                "valid": n_valid,
+                "correct": n_correct,
+                "acc": (n_correct / n_valid) if n_valid else 0.0,
+            })
+
             if verbose_every and (idx % verbose_every == 0):
-                print(f"[{model_name}] {idx}/{len(eval_items)} processed... valid={n_valid}, correct={n_correct}")
+                progress.write(f"[{model_name}] {idx}/{len(eval_items)} processed... valid={n_valid}, correct={n_correct}")
+
+    progress.close()
 
     acc = (n_correct / n_valid) if n_valid > 0 else 0.0
     metrics = {
@@ -417,6 +430,7 @@ def main():
     ap.add_argument("--top_p", type=float, default=1.0)
     ap.add_argument("--top_k", type=int, default=50)
     ap.add_argument("--device", type=str, default="auto", help="Device map: 'auto' or leave empty")
+    ap.add_argument("--skip_base_eval", action="store_true", help="Skip evaluating the base model and run only the fine-tuned model")
     args = ap.parse_args()
 
     # Prepare eval data from glob
@@ -427,23 +441,29 @@ def main():
     save_root = "eval"
     os.makedirs(save_root, exist_ok=True)
 
-    # 1) Base model
-    print("=== Evaluating base model ===")
+    base_metrics = None
+
     # Temporarily set BASE_MODEL_PATH for adapter loading fallback
     os.environ["BASE_MODEL_PATH"] = args.base_model_path
-    base_metrics = run_eval_one_model(
-        model_path=args.base_model_path,
-        eval_items=eval_items,
-        save_dir=save_root,
-        model_display_name=os.path.basename(os.path.normpath(args.base_model_path)),
-        device=args.device,
-        use_flash_attn=args.use_flash_attn,
-        max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature,
-        top_p=args.top_p,
-        top_k=args.top_k,
-        verbose_every=50,
-    )
+
+    if args.skip_base_eval:
+        print("=== Skipping base model evaluation (requested) ===")
+    else:
+        # 1) Base model
+        print("=== Evaluating base model ===")
+        base_metrics = run_eval_one_model(
+            model_path=args.base_model_path,
+            eval_items=eval_items,
+            save_dir=save_root,
+            model_display_name=os.path.basename(os.path.normpath(args.base_model_path)),
+            device=args.device,
+            use_flash_attn=args.use_flash_attn,
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            top_k=args.top_k,
+            verbose_every=50,
+        )
 
     # 2) Fine-tuned model or adapter
     print("\n=== Evaluating fine-tuned model ===")
@@ -463,7 +483,11 @@ def main():
 
     # Summary
     print("\n=== Summary ===")
-    print(json.dumps({"base": base_metrics, "fine_tuned": ft_metrics}, indent=2))
+    summary = {}
+    if base_metrics is not None:
+        summary["base"] = base_metrics
+    summary["fine_tuned"] = ft_metrics
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":

@@ -13,12 +13,12 @@ Key differences from your DPO script:
 - Reward: rule-based judge that parses the assistant's final decision (1 or 2).
 - Prompt format: conversational (tokenizer.apply_chat_template) with instructions to emit <answer>1</answer> or <answer>2</answer>.
 
-Launch (5× RTX 6000 Ada, FlashAttention2, LoRA, no vLLM):
+Launch (3× RTX 6000 Ada, FlashAttention2, LoRA, no vLLM):
 
-PYTHONPATH=. \
-torchrun --standalone --nproc_per_node=5 /path/to/train_grpo_qwen3_thinking.py \
+CUDA_VISIBLE_DEVICES=0,1,4 PYTHONPATH=. \
+torchrun --standalone --nproc_per_node=3 scripts/train_grpo_qwen3_thinking.py \
   --model_path models/Qwen3-4B-Thinking-2507 \
-  --data_path /path/to/t2t_en_selected_9.jsonl \
+  --data_path texts/go/t2t_en_selected_9.jsonl \
   --output_dir outputs/qwen3-4b-thinking-grpo \
   --epochs 1 \
   --lr 5e-6 \
@@ -62,6 +62,21 @@ try:
     _HAS_PEFT = True
 except Exception:
     _HAS_PEFT = False
+
+
+def _supports_bf16() -> bool:
+    if not torch.cuda.is_available():
+        return False
+    if hasattr(torch.cuda, "is_bf16_supported"):
+        try:
+            return torch.cuda.is_bf16_supported()
+        except Exception:
+            return False
+    try:
+        major, minor = torch.cuda.get_device_capability()
+    except Exception:
+        return False
+    return major >= 8 or (major == 7 and minor >= 5)
 
 
 # -----------------------------
@@ -135,10 +150,14 @@ INSTRUCTION_EN = (
     "Which answer is better?\n"
     "Answer 1: \"{a1}\"\n"
     "Answer 2: \"{a2}\"\n\n"
-    "Think step by step inside <think>...</think> if you must, but in the very last line output "
+    "Think step by step inside <think>...</think>, but in the very last line output "
     "your final decision as <answer>1</answer> or <answer>2</answer>.\n"
     "Do not write anything after </answer>."
 )
+
+CHAT_TEMPLATE_KWARGS = {
+    "add_generation_prompt": True,  # ensure tokenizer adds assistant cue when formatting chat prompts
+}
 
 def build_user_content(question: str, answer_1: str, answer_2: str) -> str:
     body = f"Question: {question}\n\n" + INSTRUCTION_EN.format(a1=answer_1, a2=answer_2)
@@ -163,11 +182,12 @@ def derive_items_for_training(pairs: List[Dict[str, str]], seed: int) -> List[Di
         user_content = build_user_content(p["question"], answer_1, answer_2)
         messages = [{"role": "user", "content": user_content}]
         items.append({
-            "messages": messages,
+            "prompt": messages,
             "ground_truth": gt,
             "question": p["question"],
             "answer_1": answer_1,
             "answer_2": answer_2,
+            "chat_template_kwargs": CHAT_TEMPLATE_KWARGS.copy(),
         })
     return items
 
@@ -297,6 +317,7 @@ def main():
     parser.add_argument("--vllm_guided_regex", type=str, default=None)
     parser.add_argument("--vllm_gpu_mem_util", type=float, default=0.3)
     parser.add_argument("--report_to", type=str, default=None)  # e.g., "wandb"
+    parser.add_argument("--gradient_checkpointing", action="store_true", help="Enable gradient checkpointing (disabled by default to avoid DDP+LoRA issues)")
 
     # LoRA
     parser.add_argument("--use_lora", action="store_true")
@@ -313,6 +334,14 @@ def main():
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     random.seed(args.seed)
+
+    has_cuda = torch.cuda.is_available()
+    has_bf16 = _supports_bf16()
+    torch_dtype = torch.float32
+    if has_cuda:
+        torch_dtype = torch.bfloat16 if has_bf16 else torch.float16
+
+    attn_impl = "flash_attention_2" if (args.use_flash_attn and has_cuda) else "eager"
 
     # Build pairs
     pairs = build_pairs_from_jsonl(args.data_path, min_max_star=args.min_max_star, limit=args.limit_pairs)
@@ -352,6 +381,8 @@ def main():
         scale_rewards = "batch"
 
     # Trainer config
+    gradient_checkpointing_kwargs = {"use_reentrant": False} if args.gradient_checkpointing else None
+
     training_args = GRPOConfig(
         output_dir=args.output_dir,
         run_name=os.path.basename(args.output_dir.rstrip("/")),
@@ -365,10 +396,12 @@ def main():
         logging_steps=10,
         save_steps=500,
         save_total_limit=2,
-        bf16=True,
-        tf32=True,
+        bf16=has_bf16,
+        fp16=(has_cuda and not has_bf16),
+        tf32=has_cuda,
         remove_unused_columns=False,  # keep extra columns for reward function
-        gradient_checkpointing=True,
+        gradient_checkpointing=args.gradient_checkpointing,
+        gradient_checkpointing_kwargs=gradient_checkpointing_kwargs,
 
         # GRPO specifics
         max_prompt_length=args.max_prompt_len,
@@ -381,9 +414,6 @@ def main():
         loss_type=args.loss_type,
         scale_rewards=scale_rewards,
 
-        # Conversational templating
-        chat_template_kwargs={"add_generation_prompt": True},
-
         # vLLM (optional)
         use_vllm=args.use_vllm,
         vllm_mode=args.vllm_mode,
@@ -392,11 +422,11 @@ def main():
 
         # from_pretrained kwargs
         model_init_kwargs={
-            "attn_implementation": ("flash_attention_2" if args.use_flash_attn else "eager"),
+            "attn_implementation": attn_impl,
             "trust_remote_code": True,
             "low_cpu_mem_usage": True,
             # For Thinking models, keep bf16 weights if possible
-            "torch_dtype": torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+            "dtype": torch_dtype,
         },
     )
 
@@ -408,6 +438,15 @@ def main():
         processing_class=tok,                       # tokenizer for chat template
         peft_config=peft_config,
     )
+
+    if args.gradient_checkpointing and training_args.gradient_checkpointing:
+        enable_gckpt_kwargs = gradient_checkpointing_kwargs or {}
+        model = trainer.model
+        if hasattr(model, "gradient_checkpointing_enable"):
+            try:
+                model.gradient_checkpointing_enable(gradient_checkpointing_kwargs=enable_gckpt_kwargs)
+            except TypeError:
+                model.gradient_checkpointing_enable()
 
     # kick off training
     trainer.train()
