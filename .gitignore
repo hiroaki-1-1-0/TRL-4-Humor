@@ -1,4 +1,5 @@
 models/
 outputs/
+data/images/*
 .cache
 ./__pycache__/
