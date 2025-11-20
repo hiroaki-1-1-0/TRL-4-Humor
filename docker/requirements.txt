@@ -12,4 +12,3 @@ transformers>=4.57.1
 trl>=0.9.6
 pandas>=2.3.3
 peft>=0.11.0
-flash-attn>=2.5.7
